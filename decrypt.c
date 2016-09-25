@@ -115,10 +115,7 @@ int dcrypt(char *argv[], bool recieve_file)
 	
 	//out_file_name = (char *)malloc(strlen(argv[1])+3);
 	strcat(out_file_name,argv[1] );
-	strcat(out_file_name,".uf" );
-	
-	printf("Debug Outfile %s\n", out_file_name);
-	
+	strcat(out_file_name,".uf" );	
 
 	
 	printf("Beginning Decryption...\n");
@@ -165,9 +162,7 @@ int dcrypt(char *argv[], bool recieve_file)
 	//Get file size
 	fseek(input_fp, 0, SEEK_END);
 	int file_size = ftell(input_fp);
-	printf("Debug file size 1 : %d\n", file_size); 
-	
-  printf("Debug File \n");
+
 	file_buffer = (char *) malloc (file_size * sizeof(char));
 	hmac_buffer = (char *) malloc (HMAC_SIZE);
 	
@@ -176,17 +171,13 @@ int dcrypt(char *argv[], bool recieve_file)
 	fread(file_buffer, sizeof(char), file_size, input_fp);
 	fseek(input_fp, -HMAC_SIZE, SEEK_END);
 	fread(hmac_buffer,sizeof(char),HMAC_SIZE,input_fp);
-	printf("Debug HMAC Buffer %s\n", hmac_buffer);
-	
 
-printf("Debug De \n");	
 	//Begin decrytion
 	gcry_cipher_hd_t g_cipher_handle;
 	gcry_error_t g_err;
 
 
 
-printf("Debug Ci \n");
 	g_err = gcry_cipher_open(&g_cipher_handle, GCRY_CIPHER_AES128 , GCRY_CIPHER_MODE_CBC , GCRY_CIPHER_SECURE);
 	if(g_err != GPG_ERR_NO_ERROR)
 	{
@@ -194,14 +185,10 @@ printf("Debug Ci \n");
 		return -1;
 	}
 
-printf("Debug Ci 1\n");
     g_err = gcry_cipher_setkey(g_cipher_handle, key, KDF_KEY_SIZE);
-	
-printf("Debug Ci 2\n");
-
     g_err = gcry_cipher_setiv(g_cipher_handle, &IV, KDF_KEY_SIZE);
 	
-printf("Debug Ci 3\n");
+
 decrypted_file_buffer = (char *) malloc (file_size);
     g_err = gcry_cipher_decrypt(g_cipher_handle, decrypted_file_buffer, file_size, file_buffer, file_size);
     if(g_err != 0)
@@ -210,9 +197,7 @@ decrypted_file_buffer = (char *) malloc (file_size);
 		return -1;
 	}
 		//printf("Debug Decrypted Buffer %s\n", decrypted_file_buffer);
-	
 
-printf("Debug HMAC \n");
 	//Generate the hmac
 	{
 		err = gcry_md_open(&md, GCRY_MD_SHA512, GCRY_MD_FLAG_HMAC | GCRY_MD_FLAG_SECURE);
@@ -229,7 +214,6 @@ printf("Debug HMAC \n");
 	//Compare HMAC
 	
 	{
-		printf("Debug HMAC 4\n");
 		if (strcmp(hmac_buffer, hmac_dec) !=0)
 		{
 			printf("HMACs Differ! Halt!");
@@ -239,8 +223,6 @@ printf("Debug HMAC \n");
 	
 	//Save the file	
 	{
-			
-	printf("Debug File 2 \n");
 		if (stat (out_file_name, &exist) == 0) {
 			printf ("File already present\n");
 			return 33;
@@ -261,12 +243,6 @@ printf("Debug HMAC \n");
 		}
 		}
 		printf("Successfully decrypted the input file to %s\n",out_file_name);
-	
-	//Transfer if needed
-	{
-		
-	}
-	
 
     if (stat (in_file_name, &exist) == 0)
 	{

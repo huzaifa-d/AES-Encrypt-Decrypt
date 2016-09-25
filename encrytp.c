@@ -33,6 +33,25 @@ int main(int argc, char *argv[])
 		{
            return encrypt(argv, true);
 		}
+		else if (strcmp(argv[2], "-h") == 0)
+		{
+			FILE *input_fp=fopen(argv[1], "r"); 
+			fseek(input_fp, 0, SEEK_END);
+			int file_size = ftell(input_fp);
+            fseek(input_fp, 0, SEEK_SET);
+            char *input_buffer = (char *) malloc (file_size);
+			char *digest = malloc(sizeof(gcry_md_get_algo_dlen(GCRY_MD_SHA512)));
+			
+			fread(input_buffer, sizeof(char), file_size, input_fp);
+			gcry_md_hash_buffer(GCRY_MD_SHA512,digest,input_buffer,file_size);
+			
+			printf("Hash of the file is : \n");
+			
+			for(int i = 0; i < strlen(digest); i++)
+		    printf("%02X ",(unsigned char) digest[i]);
+		    printf("\n");
+		}
+		
 		else
 		{
 			printf("Invalid parameters\n");
@@ -94,30 +113,20 @@ int encrypt(char *argv[], bool transfer_needed)
 	//Get file size
 	fseek(input_fp, 0, SEEK_END);
 	int file_size = ftell(input_fp);
-	
-	printf("Debug file size 1 : %d", file_size);       
-        
         fseek(input_fp, 0, SEEK_END);
 	file_size = ftell(input_fp);
         fseek(input_fp, 0, SEEK_SET);
-	
-	printf("Debug file size 2 : %d", file_size);
-	
         int mod = file_size % KDF_KEY_SIZE;
         int pad = KDF_KEY_SIZE - mod;
 
             
          
-printf("Debug File \n");
 	file_buffer = (char *) malloc ((file_size + pad) * sizeof(char));
 	ecrypted_file_buffer = (char *) malloc ((file_size + pad) * sizeof(char));
 	fseek(input_fp, 0, SEEK_SET);
 	fread(file_buffer, sizeof(char), file_size, input_fp);
         
         //Fix size
-        printf("Debug data 00 : %c\n", file_buffer[file_size]);
-        printf("Debug data 01 : %c\n", file_buffer[file_size-1]);
-        printf("Debug data 2 : %c\n", file_buffer[file_size-2]);
         
         //int mod = file_size % KDF_KEY_SIZE;
         if (mod != 0)
@@ -130,26 +139,15 @@ printf("Debug File \n");
             file_buffer[file_size] = temp;
             
         }
-        printf("Debug file size 3 : %d", file_size);
-
-printf("Debug En \n");	
 	//Begin encrytion
 	gcry_cipher_hd_t g_cipher_handle;
 	gcry_error_t g_err;
 
 
-
-
-
-printf("Debug Ci \n");
 	g_err = gcry_cipher_open(&g_cipher_handle, GCRY_CIPHER_AES128 , GCRY_CIPHER_MODE_CBC , GCRY_CIPHER_SECURE);
-printf("Debug Ci 1\n");
     g_err = gcry_cipher_setkey(g_cipher_handle, key, KDF_KEY_SIZE);	
-printf("Debug Ci 2\n");
-
     g_err = gcry_cipher_setiv(g_cipher_handle, &IV, KDF_KEY_SIZE);
-	
-printf("Debug Ci 3\n");
+
     //g_err = gcry_cipher_encrypt(g_cipher_handle, ecrypted_file_buffer, file_size, file_buffer, file_size);
 	g_err = gcry_cipher_encrypt(g_cipher_handle, file_buffer, file_size, NULL, 0);
 
@@ -162,24 +160,21 @@ printf("Debug Ci 3\n");
 	//Generate the hmac
 
 	{
-		printf("Debug HMAC \n");
+
 
 		err = gcry_md_open(&md, GCRY_MD_SHA512, GCRY_MD_FLAG_HMAC | GCRY_MD_FLAG_SECURE);
 		err = gcry_md_enable(md,GCRY_MD_SHA512);
 		err = gcry_md_setkey(md, key,KDF_KEY_SIZE);
-		printf("Debug HMAC Main\n");
-		printf("Debug HMAC File %d : \n", file_size);
-		
 		
 		gcry_md_write(md,file_buffer,file_size);
 		gcry_md_final(md);
 		hmac = gcry_md_read(md , GCRY_MD_SHA512 );
-		printf("Debug HMAC : %s\n", hmac);
+
 	}
 	
 	//Save the file
 	{		
-printf("Debug File 2 \n");
+
 	if( access( out_file_name, R_OK ) != -1 ) 
 	{
 	   	printf ("File already present\n");
@@ -194,8 +189,6 @@ printf("Debug File 2 \n");
 	
 	printf("Successfully encrypted. Encrypted file is %s\n", out_file_name);
 
-	
-	printf("Debug Trans \n");
 	//Transfer if needed
 	if (transfer_needed)
 	{
@@ -212,13 +205,10 @@ printf("Debug File 2 \n");
 				fclose(output_fp);
 			return -1;
 		}
-		
-		printf("Debug Trans 1\n");
 
 		dest_sock_addr.sin_family = AF_INET;
 		dest_sock_addr.sin_port = htons(port); 
 		dest_sock_addr.sin_addr.s_addr = inet_addr(ip); 
-		printf("Debug Trans 1.3\n");
 
 		if(connect(sockfd, (struct sockaddr *)&dest_sock_addr, sizeof(dest_sock_addr))<0)
 			{
@@ -236,7 +226,6 @@ printf("Debug File 2 \n");
         write(sockfd, buff, bytes_read);
             if (bytes_read != 1024)
             break;
-			printf("Debug Socket Data Sent");
         }
 		
     printf("Successfully sent the file\n");
