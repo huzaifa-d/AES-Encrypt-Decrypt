@@ -14,7 +14,6 @@
 
 int encrypt();
 char *out_file_name;
-struct stat exist;  
 
 int main(int argc, char *argv[])
 {
@@ -56,6 +55,8 @@ int encrypt(char *argv[], bool transfer_needed)
 	FILE *input_fp, *output_fp, *output_fp2;
 			gcry_error_t err;
 		gcry_md_hd_t md;
+			char *hmac;
+	int IV[KDF_KEY_SIZE] = {5844};
 	
 	
 	printf("Beginning encryption\n");
@@ -136,8 +137,7 @@ printf("Debug En \n");
 	gcry_cipher_hd_t g_cipher_handle;
 	gcry_error_t g_err;
 
-	char *hmac;
-	int IV[KDF_KEY_SIZE] = {5844};
+
 
 
 
@@ -180,8 +180,7 @@ printf("Debug Ci 3\n");
 	//Save the file
 	{		
 printf("Debug File 2 \n");
-
-	if (stat (out_file_name, &exist) == 0)
+	if( access( out_file_name, R_OK ) != -1 ) 
 	{
 	   	printf ("File already present\n");
 	    return 33;
@@ -201,28 +200,25 @@ printf("Debug File 2 \n");
 	if (transfer_needed)
 	{
 		output_fp = fopen(out_file_name,"r");
-		int sockfd; // socket handler 
+		int sockfd = socket(AF_INET, SOCK_STREAM, 0); // socket handler 
 		struct sockaddr_in dest_sock_addr; // server address 
-		char *ip, *port; 
+		char *ip = strtok(argv[3],":");
+	    int port = atoi(strtok(NULL, ":")), bytes_read = 0; 
 
 		// Open the socket handler to use it to connect to server
-		if((sockfd = socket(AF_INET, SOCK_STREAM, 0))< 0)
+		if(sockfd < 0)
 		{	
-			//checking for errors in Init
-			printf("Error : Could not create socket (Check whether you have added all libraries) \n");
+			printf("Error : Could not create socket \n");
 				fclose(output_fp);
 			return -1;
 		}
 		
 		printf("Debug Trans 1\n");
-	
-		
-	ip	 = strtok(argv[3],":");
-	port = strtok(NULL, ":");
-		int PORT = atoi(port); 
+
 		dest_sock_addr.sin_family = AF_INET;
-		dest_sock_addr.sin_port = htons(PORT); 
+		dest_sock_addr.sin_port = htons(port); 
 		dest_sock_addr.sin_addr.s_addr = inet_addr(ip); 
+		printf("Debug Trans 1.3\n");
 
 		if(connect(sockfd, (struct sockaddr *)&dest_sock_addr, sizeof(dest_sock_addr))<0)
 			{
@@ -231,19 +227,20 @@ printf("Debug File 2 \n");
 				return -1;				
 			}
 
-		printf("Transmitting to %s:%s\n",ip,port);
-		while(1){
-        unsigned char buff[256]={0};
-        int nread = fread(buff,1,256,output_fp);
-        if(nread > 0)
-        {			
-            write(sockfd, buff, nread);
+		printf("Transmitting to %s:%d\n",ip,port);
+
+		while(1)
+		{
+        unsigned char buff[1024]={0};
+        bytes_read = fread(buff,1,1024,output_fp);
+        write(sockfd, buff, bytes_read);
+            if (bytes_read != 1024)
+            break;
 			printf("Debug Socket Data Sent");
         }
-        if (nread < 256){break;}
-    }
+		
     printf("Successfully sent the file\n");
-		fclose(output_fp);
+    fclose(output_fp);
     }
 return 0;	
 

@@ -51,27 +51,21 @@ return 0;
 
 void start_listening(int port)
 {
-
-	int server_fd;
-    int in_socket;	
-	
-    FILE *f_out;
+	FILE *f_out;
     f_out = fopen(in_file_name, "w"); 
-    
     struct sockaddr_in serv_addr , client_addr;
-    int addrlen = sizeof(client_addr);
-    server_fd = socket(AF_INET, SOCK_STREAM, 0);
+	int server_fd = socket(AF_INET, SOCK_STREAM, 0);
+	int addrlen = sizeof(client_addr);
+    int in_socket = 0;	
+	int bytesReceived = 0;
+    char recvBuff[1024] = {0};
+
     if(server_fd < 0)
     {
         printf("\n Error : Could not create socket \n");
         exit -1;
     }
 
-    int bytesReceived = 0;
-    char recvBuff[256];
-    memset(recvBuff, '0', sizeof(recvBuff));
-
-    // Setting up the server properties 
     memset(&serv_addr, '0', sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -86,25 +80,23 @@ void start_listening(int port)
     listen(server_fd, 1);
 
     printf("Waiting for connections.\n");
-	while(1)
+	//We support only once connection
+	do
     {
-    	// Accept the connection and give us a socket handler
     	in_socket = accept(server_fd, (struct sockaddr*)&client_addr, &addrlen);
-	    //Read on the socket handler continously by 256
-	    printf("Recieving file...\n");
-	    while((bytesReceived = read(in_socket, recvBuff, 256)) > 0)
+	    printf("Inbound file.\n");
+	    while((bytesReceived = read(in_socket, recvBuff, 1024)) > 0)
 	    {
 	        fwrite(recvBuff, 1,bytesReceived,f_out);
-	        if(bytesReceived < 256)
+	        if(bytesReceived != 1024)
 		    {
-		        printf("Received %d bytes successfully!\n", ftell(f_out));
+		        //printf("Received %d bytes successfully!\n", ftell(f_out));
 		        close(in_socket);				
 		        fclose(f_out);
 		        return;
 		    }
 	    }
-	    close(in_socket);
-    }
+    }while(0);
 }
 
 
