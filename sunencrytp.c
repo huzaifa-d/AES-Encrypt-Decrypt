@@ -14,6 +14,7 @@
 
 int encrypt();
 char *out_file_name;
+struct stat exist;  
 
 int main(int argc, char *argv[])
 {
@@ -83,7 +84,7 @@ int encrypt(char *argv[], bool transfer_needed)
 	printf("\n");
 
     //File operations
-	input_fp=fopen(argv[1], "rb"); 
+	input_fp=fopen(argv[1], "r"); 
 	if (!input_fp) {
   		printf("Error: Opening file, exiting...\n");
   		return -1;
@@ -167,7 +168,7 @@ printf("Debug Ci 3\n");
 		err = gcry_md_enable(md,GCRY_MD_SHA512);
 		err = gcry_md_setkey(md, key,KDF_KEY_SIZE);
 		printf("Debug HMAC Main\n");
-		printf("Debug HMAC File %d : %s\n", file_size, file_buffer);
+		printf("Debug HMAC File %d : \n", file_size);
 		
 		
 		gcry_md_write(md,file_buffer,file_size);
@@ -179,12 +180,13 @@ printf("Debug Ci 3\n");
 	//Save the file
 	{		
 printf("Debug File 2 \n");
-	if( access( out_file_name, R_OK ) != -1 ) 
+
+	if (stat (out_file_name, &exist) == 0)
 	{
 	   	printf ("File already present\n");
 	    return 33;
 	} 
-		output_fp = fopen(out_file_name,"wb");
+		output_fp = fopen(out_file_name,"w");
 		fwrite(file_buffer, file_size, sizeof(char), output_fp);
 		fwrite(hmac, 64 , sizeof(char), output_fp);		
 		fclose(input_fp);
@@ -198,7 +200,7 @@ printf("Debug File 2 \n");
 	//Transfer if needed
 	if (transfer_needed)
 	{
-		output_fp = fopen(out_file_name,"rb");
+		output_fp = fopen(out_file_name,"r");
 		int sockfd; // socket handler 
 		struct sockaddr_in dest_sock_addr; // server address 
 		char *ip, *port; 

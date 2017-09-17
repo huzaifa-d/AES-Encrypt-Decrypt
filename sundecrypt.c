@@ -15,8 +15,9 @@
 
 int dcrypt();
 void start_listening(int port);
-char *out_file_name;
-char *in_file_name = "recieved.file";
+char out_file_name[100];
+char in_file_name[] = "recieved.file";
+struct stat exist;  
 
 int main(int argc, char *argv[])
 {
@@ -55,14 +56,7 @@ void start_listening(int port)
     int in_socket;	
 	
     FILE *f_out;
-    f_out = fopen(in_file_name, "w+b"); 
-    if(!f_out)
-    {
-        printf("Error opening file");
-        error(-1);
-        
-    }
-
+    f_out = fopen(in_file_name, "w"); 
     
     struct sockaddr_in serv_addr , client_addr;
     int addrlen = sizeof(client_addr);
@@ -70,28 +64,24 @@ void start_listening(int port)
     if(server_fd < 0)
     {
         printf("\n Error : Could not create socket \n");
-        return -1;
+        exit -1;
     }
-
 
     int bytesReceived = 0;
     char recvBuff[256];
     memset(recvBuff, '0', sizeof(recvBuff));
 
-
     // Setting up the server properties 
     memset(&serv_addr, '0', sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    serv_addr.sin_port = htons(port);
-	
+    serv_addr.sin_port = htons(port);	
 
 	if(bind(server_fd, (struct sockaddr*)&serv_addr,sizeof(serv_addr)) < 0){
 		printf("\n Error : Bind error \n");
 		close(server_fd);
-        return -1;
+        exit -1;
 	}
-
 
     listen(server_fd, 1);
 
@@ -101,42 +91,20 @@ void start_listening(int port)
     	// Accept the connection and give us a socket handler
     	in_socket = accept(server_fd, (struct sockaddr*)&client_addr, &addrlen);
 	    //Read on the socket handler continously by 256
-	    printf("Inbound File.\n");
+	    printf("Recieving file...\n");
 	    while((bytesReceived = read(in_socket, recvBuff, 256)) > 0)
 	    {
 	        fwrite(recvBuff, 1,bytesReceived,f_out);
-			printf("Debug Socket Data Written");
 	        if(bytesReceived < 256)
 		    {
-		        printf("Received successfully \n");
-		        close(in_socket);
+		        printf("Received %d bytes successfully!\n", ftell(f_out));
+		        close(in_socket);				
 		        fclose(f_out);
 		        return;
 		    }
 	    }
 	    close(in_socket);
     }
-	
-    do
-    {
-    	// Accept the connection and give us a socket handler
-    	in_socket = accept(server_fd, (struct sockaddr*)&client_addr, &addrlen);
-	    //Read on the socket handler continously by 256
-	    printf("Inbound File.\n");
-	    while((bytesReceived = read(in_socket, recvBuff, 256)) > 0)
-	    {
-	        fwrite(recvBuff, 1,bytesReceived,f_out);
-	        if(bytesReceived < 256)
-		    {
-		        printf("Received successfully \n");
-		        close(in_socket);
-		        fclose(f_out);
-		        return;
-		    }
-	    }	    
-    }while (0);
-	close(in_socket);
-	fclose(f_out);
 }
 
 
@@ -153,12 +121,15 @@ int dcrypt(char *argv[], bool recieve_file)
 	char *hmac_dec;
 	int IV[KDF_KEY_SIZE] = {5844};
 	
-	out_file_name = (char *)malloc(strlen(argv[1])+3);
+	//out_file_name = (char *)malloc(strlen(argv[1])+3);
 	strcat(out_file_name,argv[1] );
 	strcat(out_file_name,".uf" );
+	
+	printf("Debug Outfile %s\n", out_file_name);
+	
 
 	
-	printf("Beginning Decryption\n");
+	printf("Beginning Decryption...\n");
 	printf("Please enter password\n");
 	scanf("%s", &pass);
 
@@ -176,7 +147,7 @@ int dcrypt(char *argv[], bool recieve_file)
 	}		
 	
 
-	//printf("Key: ");
+	printf("\nKey: ");
 	for(int i = 0; i < KDF_KEY_SIZE; i++)
 		printf("%02X ",(unsigned char) key[i]);
 	printf("\n");
@@ -184,15 +155,15 @@ int dcrypt(char *argv[], bool recieve_file)
     //File operations
 	if (!recieve_file)
 	{
-	input_fp=fopen(argv[1], "rb"); 
+	input_fp=fopen(argv[1], "r"); 
 	if (!input_fp) {
   		printf("Error: Opening file, exiting...\n");
   		return -1;
 	}
-	}
+	}	
 	else
-	{
-			input_fp=fopen(in_file_name, "rb"); 
+	{	
+			input_fp=fopen(in_file_name, "r"); 
 	if (!input_fp) {
   		printf("Error: Opening file, exiting...\n");
   		return -1;
@@ -202,9 +173,9 @@ int dcrypt(char *argv[], bool recieve_file)
 	//Get file size
 	fseek(input_fp, 0, SEEK_END);
 	int file_size = ftell(input_fp);
-	printf("Debug file size 1 : %d", file_size); 
+	printf("Debug file size 1 : %d\n", file_size); 
 	
-printf("Debug File \n");
+  printf("Debug File \n");
 	file_buffer = (char *) malloc (file_size * sizeof(char));
 	hmac_buffer = (char *) malloc (HMAC_SIZE);
 	
@@ -256,7 +227,7 @@ printf("Debug HMAC \n");
 		err = gcry_md_enable(md,GCRY_MD_SHA512);
 		err = gcry_md_setkey(md, key,KDF_KEY_SIZE);
 		printf("Debug HMAC Main\n");
-		printf("Debug HMAC File %d : %s\n", file_size, decrypted_file_buffer);
+		printf("Debug HMAC File %d : \n", file_size, decrypted_file_buffer);
 		gcry_md_write(md,file_buffer,file_size);
 		gcry_md_final(md);
 		hmac_dec = gcry_md_read(md , GCRY_MD_SHA512 );
@@ -278,11 +249,11 @@ printf("Debug HMAC \n");
 	{
 			
 	printf("Debug File 2 \n");
-		if( access( out_file_name, F_OK ) != -1 ) {
+		if (stat (out_file_name, &exist) == 0) {
 			printf ("File already present\n");
 			return 33;
 		} 
-			output_fp = fopen(out_file_name,"wb");
+			output_fp = fopen(out_file_name,"w");
 			if (output_fp){ 
 			while (decrypted_file_buffer[file_size-1] == '\0')
 			{
@@ -302,6 +273,12 @@ printf("Debug HMAC \n");
 	//Transfer if needed
 	{
 		
+	}
+	
+
+    if (stat (in_file_name, &exist) == 0)
+	{
+		system("rm recieved.file");
 	}
 	
 	return 0;
