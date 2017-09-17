@@ -25,26 +25,29 @@ int main(int argc, char *argv[])
 	}
 	else
 	{
-		out_file_name = (char *)malloc(strlen(argv[1])+3);
-		strcat(out_file_name,argv[1] );
-		strcat(out_file_name,".uf" );
-
 		if (strcmp(argv[2], "-l") == 0)
 		{
-			encrypt(argv, false);
+			return encrypt(argv, false);
 		}
 		else if (strcmp(argv[2], "-d") == 0)
 		{
-           encrypt(argv, true);
+           return encrypt(argv, true);
 		}
 		else
+		{
 			printf("Invalid parameters\n");
+			return -1;
+		}
+		
 	}
 return 0;
 }
 
 int encrypt(char *argv[], bool transfer_needed)
 {
+	out_file_name = (char *)malloc(strlen(argv[1])+3);
+	strcat(out_file_name,argv[1] );
+	strcat(out_file_name,".uf" );
 	char pass[100], key[16];
 	char *file_buffer, *ecrypted_file_buffer;
 	int len = 0;
@@ -55,10 +58,7 @@ int encrypt(char *argv[], bool transfer_needed)
 	printf("Beginning encryption\n");
 	printf("Please enter password\n");
 	scanf("%s", &pass);
-	
-    printf("Pass: %s", pass);
-	
-	
+
 	gcry_kdf_derive(pass,
                         strlen(pass),
                         GCRY_KDF_PBKDF2,
@@ -111,8 +111,6 @@ int encrypt(char *argv[], bool transfer_needed)
         fseek(input_fp, 0, SEEK_SET);
 	
 	printf("Debug file size 2 : %d", file_size);
-            
-	//file_size = file_size % 16 == 0 ? file_size : 16 * (file_size/16) + 16;
 	
         int mod = file_size % 16;
         int pad = 16 - mod;
@@ -165,7 +163,7 @@ printf("Debug Ci 3\n");
 	//Change this
     if(g_err != 0){
 		//printf ("Error at encrypting:%s %s\n",gcry_strerror(status_encrypt),gcry_strerror(status_encrypt));
-		exit(-11);
+		return -1;
 	}
 
 
@@ -178,27 +176,19 @@ printf("Debug Ci 3\n");
 		err = gcry_md_open(&md, GCRY_MD_SHA512, GCRY_MD_FLAG_HMAC | GCRY_MD_FLAG_SECURE);
 		if(err != GPG_ERR_NO_ERROR){
 			printf ("Error at opening handle for hmac: %s\n",gcry_strerror(err));
-			exit(-1);
+			return -1;
 		}
 		err = gcry_md_enable(md,GCRY_MD_SHA512);
 		err = gcry_md_setkey(md, key,16);
 		if(err != GPG_ERR_NO_ERROR){
 			printf ("Error at setting key: %s\n",gcry_strerror(err));
-			exit(-1);
+			return -1;
 		}
-		// generating the HMAC using the cipher text
 		gcry_md_write(md,ecrypted_file_buffer,file_size);
 		gcry_md_final(md);
-		// printf("\nlength: %lu\n",length);
 
 
 		hmac = gcry_md_read(md , GCRY_MD_SHA512 );
-		if(hmac == NULL ){
-			printf ("hmac null ?\n");
-			// exit(-1);
-		}
-		// print_buf(hmac,64); // debug
-		// printf("hmac length : %lu\n",strlen(hmac)); // debug to check hmac length should be 64	
 	}
 	
 	//Save the file
@@ -211,20 +201,16 @@ printf("Debug File 2 \n");
 	} 
 		output_fp = fopen(out_file_name,"wb");
 		if (output_fp){
-		// buff is encrypted content and hmac is HMAC generated
 		fwrite(ecrypted_file_buffer, file_size, sizeof(char), output_fp);
                 if (0)
 		fwrite(hmac, 64 , sizeof(char), output_fp);
-		// added + 1 for the trailing char. just to finish the writing to file properly
-		// basically writes a null value to the end.
-		// output is equal to encrypted content length + HMAC length.
 		
 		//Clean this
 		fclose(input_fp);
 	}
 	else{
 		printf ("Error at opening file to write\n");
-		exit(-1);
+		return -1;
 	}
 	}
 	printf("Successfully encrypted the inputfile to %s\n",out_file_name);
@@ -245,7 +231,7 @@ printf("Debug File 2 \n");
 			//checking for errors in Init
 			printf("Error : Could not create socket (Check whether you have added all libraries) \n");
 				fclose(output_fp);
-			exit(-1);
+			return -1;
 		}
 		
 		printf("Debug Trans 1\n");
@@ -253,22 +239,16 @@ printf("Debug File 2 \n");
 		
 	ip	 = strtok(argv[3],":");
 	port = strtok(NULL, ":");
-		int PORT = atoi(port); // casting the global variable char to int
-
-		/* Initialize server properties by using ip and port from the args */
+		int PORT = atoi(port); 
 		dest_sock_addr.sin_family = AF_INET;
-		dest_sock_addr.sin_port = htons(PORT); // port convertion from host byte order to network byte order.
-		dest_sock_addr.sin_addr.s_addr = inet_addr(ip); // easy way to convert it to a valid format
-		
+		dest_sock_addr.sin_port = htons(PORT); 
+		dest_sock_addr.sin_addr.s_addr = inet_addr(ip); 
 
-		// Connect to the socket using the handler
 		if(connect(sockfd, (struct sockaddr *)&dest_sock_addr, sizeof(dest_sock_addr))<0)
 			{
-				// happens when it fails to connect to the server.
 				printf("\n Error in establishing connection to Server\n");
 					fclose(output_fp);
-				exit(-1);
-				// configure the exit parameters to whatever code we want in future.
+				return -1;				
 			}
 
 		printf("Transmitting to %s:%s\n",ip,port);
