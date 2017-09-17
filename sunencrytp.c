@@ -53,6 +53,8 @@ int encrypt(char *argv[], bool transfer_needed)
 	int len = 0;
 	int sucess = 0;
 	FILE *input_fp, *output_fp, *output_fp2;
+			gcry_error_t err;
+		gcry_md_hd_t md;
 	
 	
 	printf("Beginning encryption\n");
@@ -81,7 +83,7 @@ int encrypt(char *argv[], bool transfer_needed)
 	printf("\n");
 
     //File operations
-	input_fp=fopen(argv[1], "r"); 
+	input_fp=fopen(argv[1], "rb"); 
 	if (!input_fp) {
   		printf("Error: Opening file, exiting...\n");
   		return -1;
@@ -157,45 +159,36 @@ printf("Debug Ci 3\n");
 	}
 
 	//Generate the hmac
-	if (0)
+
 	{
 		printf("Debug HMAC \n");
-		gcry_error_t err;
-		gcry_md_hd_t md;
+
 		err = gcry_md_open(&md, GCRY_MD_SHA512, GCRY_MD_FLAG_HMAC | GCRY_MD_FLAG_SECURE);
-		if(err != GPG_ERR_NO_ERROR){
-			printf ("Error at opening handle for hmac: %s\n",gcry_strerror(err));
-			return -1;
-		}
 		err = gcry_md_enable(md,GCRY_MD_SHA512);
 		err = gcry_md_setkey(md, key,KDF_KEY_SIZE);
-		if(err != GPG_ERR_NO_ERROR){
-			printf ("Error at setting key: %s\n",gcry_strerror(err));
-			return -1;
-		}
+		printf("Debug HMAC Main\n");
+		printf("Debug HMAC File %d : %s\n", file_size, file_buffer);
+		
+		
 		gcry_md_write(md,file_buffer,file_size);
 		gcry_md_final(md);
-
-
 		hmac = gcry_md_read(md , GCRY_MD_SHA512 );
+		printf("Debug HMAC : %s\n", hmac);
 	}
 	
 	//Save the file
-	{
-		
+	{		
 printf("Debug File 2 \n");
-	if( access( out_file_name, F_OK ) != -1 ) {
+	if( access( out_file_name, R_OK ) != -1 ) 
+	{
 	   	printf ("File already present\n");
 	    return 33;
 	} 
-		output_fp = fopen(out_file_name,"w");
-
+		output_fp = fopen(out_file_name,"wb");
 		fwrite(file_buffer, file_size, sizeof(char), output_fp);
-                if (0)
 		fwrite(hmac, 64 , sizeof(char), output_fp);		
 		fclose(input_fp);
 		fclose(output_fp);
-
 	}
 	
 	printf("Successfully encrypted. Encrypted file is %s\n", out_file_name);

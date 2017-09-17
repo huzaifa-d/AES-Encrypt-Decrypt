@@ -11,6 +11,7 @@
 #define SALT "NaCl"
 #define ITERATIONS 4096
 #define KDF_KEY_SIZE 16
+#define HMAC_SIZE 64
 
 int dcrypt();
 void start_listening(int port);
@@ -183,7 +184,7 @@ int dcrypt(char *argv[], bool recieve_file)
     //File operations
 	if (!recieve_file)
 	{
-	input_fp=fopen(argv[1], "r"); 
+	input_fp=fopen(argv[1], "rb"); 
 	if (!input_fp) {
   		printf("Error: Opening file, exiting...\n");
   		return -1;
@@ -200,21 +201,19 @@ int dcrypt(char *argv[], bool recieve_file)
 	
 	//Get file size
 	fseek(input_fp, 0, SEEK_END);
-	//Removing the HMAC
 	int file_size = ftell(input_fp);
-	printf("Debug file size 1 : %d", file_size);        
-	
-	
-	
+	printf("Debug file size 1 : %d", file_size); 
 	
 printf("Debug File \n");
 	file_buffer = (char *) malloc (file_size * sizeof(char));
-	hmac_buffer = (char *) malloc (64);
+	hmac_buffer = (char *) malloc (HMAC_SIZE);
 	
+	file_size -= HMAC_SIZE;
 	fseek(input_fp, 0, SEEK_SET);
 	fread(file_buffer, sizeof(char), file_size, input_fp);
-	fseek(input_fp, -65, SEEK_END);
-	fread(hmac_buffer,sizeof(char),64,input_fp);
+	fseek(input_fp, -HMAC_SIZE, SEEK_END);
+	fread(hmac_buffer,sizeof(char),HMAC_SIZE,input_fp);
+	printf("Debug HMAC Buffer %s\n", hmac_buffer);
 	
 
 printf("Debug De \n");	
@@ -247,34 +246,31 @@ decrypted_file_buffer = (char *) malloc (file_size);
 		printf ("Error: During decryption %s\n",gcry_strerror(g_err));
 		return -1;
 	}
+		//printf("Debug Decrypted Buffer %s\n", decrypted_file_buffer);
+	
 
 printf("Debug HMAC \n");
 	//Generate the hmac
 	{
-
 		err = gcry_md_open(&md, GCRY_MD_SHA512, GCRY_MD_FLAG_HMAC | GCRY_MD_FLAG_SECURE);
-
-		printf("Debug HMAC 1\n");
 		err = gcry_md_enable(md,GCRY_MD_SHA512);
 		err = gcry_md_setkey(md, key,KDF_KEY_SIZE);
-
-		printf("Debug HMAC 2\n");
-
-		gcry_md_write(md,decrypted_file_buffer,file_size);
+		printf("Debug HMAC Main\n");
+		printf("Debug HMAC File %d : %s\n", file_size, decrypted_file_buffer);
+		gcry_md_write(md,file_buffer,file_size);
 		gcry_md_final(md);
-
-
-		printf("Debug HMAC 3\n");
 		hmac_dec = gcry_md_read(md , GCRY_MD_SHA512 );
+		printf("Debug HMAC : %s\n", hmac_dec);
 	}
 	
 	//Compare HMAC
+	
 	{
 		printf("Debug HMAC 4\n");
-		if (!strcmp(hmac_buffer, hmac_dec))
+		if (strcmp(hmac_buffer, hmac_dec) !=0)
 		{
 			printf("HMACs Differ! Halt!");
-			return -1;
+			//return -1;
 		}
 	}
 	
@@ -286,7 +282,7 @@ printf("Debug HMAC \n");
 			printf ("File already present\n");
 			return 33;
 		} 
-			output_fp = fopen(out_file_name,"w");
+			output_fp = fopen(out_file_name,"wb");
 			if (output_fp){ 
 			while (decrypted_file_buffer[file_size-1] == '\0')
 			{
