@@ -13,7 +13,7 @@
 #define KDF_KEY_SIZE 16
 
 int dcrypt();
-void start_listening();
+void start_listening(int port);
 char *out_file_name;
 char *in_file_name = "recieved.file";
 
@@ -27,22 +27,22 @@ int main(int argc, char *argv[])
 	}
 	else
 	{
-		out_file_name = (char *)malloc(strlen(argv[1])+3);
-		strcat(out_file_name,argv[1] );
-		strcat(out_file_name,".uf" );
 
 		if (strcmp(argv[2], "-l") == 0)
 		{
-			dcrypt(argv, false);
+			return dcrypt(argv, false);
 		}
 		else if (strcmp(argv[2], "-d") == 0)
 		{
 		   int port = atoi(argv[3]);
            start_listening(port);
-           dcrypt(argv, true);
+           return dcrypt(argv, true);
 		}
 		else
+		{
 			printf("Invalid parameters\n");
+			return -1;
+		}
 	}
 return 0;
 }
@@ -141,11 +141,20 @@ void start_listening(int port)
 
 int dcrypt(char *argv[], bool recieve_file)
 {
-	char pass[100], key[16];
+	char pass[100], key[KDF_KEY_SIZE];
 	char *file_buffer, *hmac_buffer, *decrypted_file_buffer;
 	int len = 0;
 	int sucess = 0;
 	FILE *input_fp, *output_fp;
+			gcry_error_t err;
+		gcry_md_hd_t md;
+		
+	char *hmac_dec;
+	int IV[KDF_KEY_SIZE] = {5844};
+	
+	out_file_name = (char *)malloc(strlen(argv[1])+3);
+	strcat(out_file_name,argv[1] );
+	strcat(out_file_name,".uf" );
 
 	
 	printf("Beginning Decryption\n");
@@ -156,10 +165,10 @@ int dcrypt(char *argv[], bool recieve_file)
 	gcry_kdf_derive(pass, strlen(pass), GCRY_KDF_PBKDF2, GCRY_MD_SHA512, SALT,
                         strlen(SALT),
                         ITERATIONS,
-                        16,
+                        KDF_KEY_SIZE,
                         key);
 			
-    if (strlen(key) == 0)
+    if (!strlen(key))
 	{
 		printf("Error: Generating key, exiting...\n");
 		return -1;
@@ -167,14 +176,14 @@ int dcrypt(char *argv[], bool recieve_file)
 	
 
 	//printf("Key: ");
-	for(int i = 0; i < 16; i++)
+	for(int i = 0; i < KDF_KEY_SIZE; i++)
 		printf("%02X ",(unsigned char) key[i]);
 	printf("\n");
 
     //File operations
 	if (!recieve_file)
 	{
-	input_fp=fopen(argv[1], "rb"); 
+	input_fp=fopen(argv[1], "r"); 
 	if (!input_fp) {
   		printf("Error: Opening file, exiting...\n");
   		return -1;
@@ -193,8 +202,7 @@ int dcrypt(char *argv[], bool recieve_file)
 	fseek(input_fp, 0, SEEK_END);
 	//Removing the HMAC
 	int file_size = ftell(input_fp);
-	printf("Debug file size 1 : %d", file_size);
-        
+	printf("Debug file size 1 : %d", file_size);        
 	
 	
 	
@@ -214,52 +222,44 @@ printf("Debug De \n");
 	gcry_cipher_hd_t g_cipher_handle;
 	gcry_error_t g_err;
 
-	char *hmac_dec;
 
 
 printf("Debug Ci \n");
 	g_err = gcry_cipher_open(&g_cipher_handle, GCRY_CIPHER_AES128 , GCRY_CIPHER_MODE_CBC , GCRY_CIPHER_SECURE);
-	//if(g_err != GPG_ERR_NO_ERROR)
-	//{
-	//	printf ("Error: Getting a cipher handle, exiting...\n",gcry_strerror(g_err));
-	//	return -1;
-	//}
+	if(g_err != GPG_ERR_NO_ERROR)
+	{
+		printf ("Error: Getting a cipher handle, exiting...\n", gcry_strerror(g_err));
+		return -1;
+	}
 
 printf("Debug Ci 1\n");
-    g_err = gcry_cipher_setkey(g_cipher_handle, key, 16);
+    g_err = gcry_cipher_setkey(g_cipher_handle, key, KDF_KEY_SIZE);
 	
 printf("Debug Ci 2\n");
-int IV[16] = {5844};
-    g_err = gcry_cipher_setiv(g_cipher_handle, &IV, 16);
+
+    g_err = gcry_cipher_setiv(g_cipher_handle, &IV, KDF_KEY_SIZE);
 	
 printf("Debug Ci 3\n");
 decrypted_file_buffer = (char *) malloc (file_size);
     g_err = gcry_cipher_decrypt(g_cipher_handle, decrypted_file_buffer, file_size, file_buffer, file_size);
-	//Change this
-    if(g_err != 0){
-		//printf ("Error at encrypting:%s %s\n",gcry_strerror(status_encrypt),gcry_strerror(status_encrypt));
+    if(g_err != 0)
+	{
+		printf ("Error: During decryption %s\n",gcry_strerror(g_err));
 		return -1;
 	}
 
 printf("Debug HMAC \n");
 	//Generate the hmac
 	{
-		gcry_error_t err;
-		gcry_md_hd_t md;
+
 		err = gcry_md_open(&md, GCRY_MD_SHA512, GCRY_MD_FLAG_HMAC | GCRY_MD_FLAG_SECURE);
-		if(err != GPG_ERR_NO_ERROR){
-			//printf ("Error at opening handle for hmac: %s\n",gcry_strerror(err));
-			return -1;
-		}
+
 		printf("Debug HMAC 1\n");
 		err = gcry_md_enable(md,GCRY_MD_SHA512);
-		err = gcry_md_setkey(md, key,16);
-		if(err != GPG_ERR_NO_ERROR){
-			//printf ("Error at setting key: %s\n",gcry_strerror(err));
-			return -1;
-		}
+		err = gcry_md_setkey(md, key,KDF_KEY_SIZE);
+
 		printf("Debug HMAC 2\n");
-		// generating the HMAC using the cipher text
+
 		gcry_md_write(md,decrypted_file_buffer,file_size);
 		gcry_md_final(md);
 
@@ -280,31 +280,33 @@ printf("Debug HMAC \n");
 	
 	//Save the file	
 	{
-		
-printf("Debug File 2 \n");
-	if( access( out_file_name, F_OK ) != -1 ) {
-	   	printf ("File already present\n");
-	    return 33;
-	} 
-		output_fp = fopen(out_file_name,"wb");
-		if (output_fp){ 
-        while (decrypted_file_buffer[file_size-1] == '\0')
-        {
-            file_size--;
-        }        
-		fwrite(decrypted_file_buffer, file_size, sizeof(char), output_fp);
-		fclose(output_fp);
-		fclose(input_fp);
-	}
-	else{
-		printf ("Error at opening file to write\n");
-		return -1;
-	}
-	}
-	printf("Successfully decrypted the input file to %s\n",out_file_name);
+			
+	printf("Debug File 2 \n");
+		if( access( out_file_name, F_OK ) != -1 ) {
+			printf ("File already present\n");
+			return 33;
+		} 
+			output_fp = fopen(out_file_name,"w");
+			if (output_fp){ 
+			while (decrypted_file_buffer[file_size-1] == '\0')
+			{
+				file_size--;
+			}        
+			fwrite(decrypted_file_buffer, file_size, sizeof(char), output_fp);
+			fclose(output_fp);
+			fclose(input_fp);
+		}
+		else{
+			printf ("Error at opening file to write\n");
+			return -1;
+		}
+		}
+		printf("Successfully decrypted the input file to %s\n",out_file_name);
 	
 	//Transfer if needed
 	{
 		
 	}
+	
+	return 0;
 }
