@@ -48,7 +48,7 @@ int encrypt(char *argv[], bool transfer_needed)
 	out_file_name = (char *)malloc(strlen(argv[1])+3);
 	strcat(out_file_name,argv[1] );
 	strcat(out_file_name,".uf" );
-	char pass[100], key[16];
+	char pass[100], key[KDF_KEY_SIZE];
 	char *file_buffer, *ecrypted_file_buffer;
 	int len = 0;
 	int sucess = 0;
@@ -66,7 +66,7 @@ int encrypt(char *argv[], bool transfer_needed)
                         SALT,
                         strlen(SALT),
                         ITERATIONS,
-                        16,
+                        KDF_KEY_SIZE,
                         key);
 			
     if (strlen(key) == 0)
@@ -76,12 +76,12 @@ int encrypt(char *argv[], bool transfer_needed)
 	}	
 
 	//printf("Key: ");
-	for(int i = 0; i < 16; i++)
+	for(int i = 0; i < KDF_KEY_SIZE; i++)
 		printf("%02X ",(unsigned char) key[i]);
 	printf("\n");
 
     //File operations
-	input_fp=fopen(argv[1], "rb"); 
+	input_fp=fopen(argv[1], "r"); 
 	if (!input_fp) {
   		printf("Error: Opening file, exiting...\n");
   		return -1;
@@ -91,20 +91,7 @@ int encrypt(char *argv[], bool transfer_needed)
 	fseek(input_fp, 0, SEEK_END);
 	int file_size = ftell(input_fp);
 	
-	printf("Debug file size 1 : %d", file_size);
-        if (0)
-        if (file_size % 16 != 0)
-        {
-            fclose(input_fp);
-            FILE *fp = fopen(argv[1], "a+");
-            fseek(fp, 0, SEEK_END);
-            for (int i=0; i < 16 - (file_size % 16); i++)
-                fputc('\0',fp);
-            fclose(input_fp);
-            input_fp = fopen(argv[1], "rb");
-            file_size += (file_size % 16);
-            
-        }
+	printf("Debug file size 1 : %d", file_size);       
         
         fseek(input_fp, 0, SEEK_END);
 	file_size = ftell(input_fp);
@@ -112,8 +99,8 @@ int encrypt(char *argv[], bool transfer_needed)
 	
 	printf("Debug file size 2 : %d", file_size);
 	
-        int mod = file_size % 16;
-        int pad = 16 - mod;
+        int mod = file_size % KDF_KEY_SIZE;
+        int pad = KDF_KEY_SIZE - mod;
 
             
          
@@ -128,11 +115,11 @@ printf("Debug File \n");
         printf("Debug data 01 : %c\n", file_buffer[file_size-1]);
         printf("Debug data 2 : %c\n", file_buffer[file_size-2]);
         
-        //int mod = file_size % 16;
+        //int mod = file_size % KDF_KEY_SIZE;
         if (mod != 0)
         {
             char temp = file_buffer[file_size];
-            for (int i=0; i < 16 - mod; i++)
+            for (int i=0; i < KDF_KEY_SIZE - mod; i++)
             {
                 file_buffer[file_size++] = '\0';
             }
@@ -147,25 +134,27 @@ printf("Debug En \n");
 	gcry_error_t g_err;
 
 	char *hmac;
+	int IV[KDF_KEY_SIZE] = {5844};
 
 
 
 printf("Debug Ci \n");
 	g_err = gcry_cipher_open(&g_cipher_handle, GCRY_CIPHER_AES128 , GCRY_CIPHER_MODE_CBC , GCRY_CIPHER_SECURE);
 printf("Debug Ci 1\n");
-    g_err = gcry_cipher_setkey(g_cipher_handle, key, 16);	
+    g_err = gcry_cipher_setkey(g_cipher_handle, key, KDF_KEY_SIZE);	
 printf("Debug Ci 2\n");
-int IV[16] = {5844};
-    g_err = gcry_cipher_setiv(g_cipher_handle, &IV, 16);
+
+    g_err = gcry_cipher_setiv(g_cipher_handle, &IV, KDF_KEY_SIZE);
 	
 printf("Debug Ci 3\n");
-    g_err = gcry_cipher_encrypt(g_cipher_handle, ecrypted_file_buffer, file_size, file_buffer, file_size);
-	//Change this
-    if(g_err != 0){
-		//printf ("Error at encrypting:%s %s\n",gcry_strerror(status_encrypt),gcry_strerror(status_encrypt));
+    //g_err = gcry_cipher_encrypt(g_cipher_handle, ecrypted_file_buffer, file_size, file_buffer, file_size);
+	g_err = gcry_cipher_encrypt(g_cipher_handle, file_buffer, file_size, NULL, 0);
+
+    if(g_err != 0)
+	{
+		printf ("Error: During encryption %s\n",gcry_strerror(g_err));
 		return -1;
 	}
-
 
 	//Generate the hmac
 	if (0)
@@ -179,12 +168,12 @@ printf("Debug Ci 3\n");
 			return -1;
 		}
 		err = gcry_md_enable(md,GCRY_MD_SHA512);
-		err = gcry_md_setkey(md, key,16);
+		err = gcry_md_setkey(md, key,KDF_KEY_SIZE);
 		if(err != GPG_ERR_NO_ERROR){
 			printf ("Error at setting key: %s\n",gcry_strerror(err));
 			return -1;
 		}
-		gcry_md_write(md,ecrypted_file_buffer,file_size);
+		gcry_md_write(md,file_buffer,file_size);
 		gcry_md_final(md);
 
 
@@ -199,22 +188,18 @@ printf("Debug File 2 \n");
 	   	printf ("File already present\n");
 	    return 33;
 	} 
-		output_fp = fopen(out_file_name,"wb");
-		if (output_fp){
-		fwrite(ecrypted_file_buffer, file_size, sizeof(char), output_fp);
+		output_fp = fopen(out_file_name,"w");
+
+		fwrite(file_buffer, file_size, sizeof(char), output_fp);
                 if (0)
-		fwrite(hmac, 64 , sizeof(char), output_fp);
-		
-		//Clean this
+		fwrite(hmac, 64 , sizeof(char), output_fp);		
 		fclose(input_fp);
+		fclose(output_fp);
+
 	}
-	else{
-		printf ("Error at opening file to write\n");
-		return -1;
-	}
-	}
-	printf("Successfully encrypted the inputfile to %s\n",out_file_name);
-	fclose(output_fp);
+	
+	printf("Successfully encrypted. Encrypted file is %s\n", out_file_name);
+
 	
 	printf("Debug Trans \n");
 	//Transfer if needed
@@ -264,7 +249,8 @@ printf("Debug File 2 \n");
     }
     printf("Successfully sent the file\n");
 		fclose(output_fp);
-    }	
+    }
+return 0;	
 
 	}
 
